@@ -36,6 +36,7 @@ def _slugify(text: str) -> str:
 def _get_backup_path(location: str, listing_type: str, page: int) -> str:
     location_slug = _slugify(location)
     filename = f"zillow-listings-{location_slug}-{listing_type}-page-{page:02d}.json"
+    settings.backup_dir.mkdir(parents=True, exist_ok=True)
     return os.path.join(settings.backup_dir, filename)
 
 
