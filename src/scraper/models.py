@@ -1,10 +1,12 @@
 """
 Peewee ORM models.
 
-Two tables:
+Tables:
   - ScrapedPage   : tracks every HasData API URL that was successfully fetched
                     (dedup / resume key — one row per page URL)
-  - ZillowListing : one row per property, upserted on property_id
+  - ZillowListing : one row per Zillow property, upserted on property_id
+  - ScrapedItem   : generic table used by all other endpoints; one table per
+                    endpoint, created dynamically via get_item_model().
 """
 
 from datetime import datetime, timezone
@@ -22,6 +24,9 @@ from playhouse.postgres_ext import BinaryJSONField
 
 # Lazy database — configured in db.init_db()
 db = PostgresqlDatabase(None)
+
+# Cache so we don't recreate the same model class twice
+_item_model_cache: dict[str, type] = {}
 
 
 class BaseModel(Model):
@@ -91,3 +96,39 @@ class ZillowListing(BaseModel):
 
     class Meta:
         table_name = "zillow_listings"
+
+
+# ---------------------------------------------------------------------------
+# Generic per-endpoint item model (one table per endpoint)
+# ---------------------------------------------------------------------------
+
+
+def get_item_model(table_name: str) -> type:
+    """
+    Return (and cache) a Peewee model class bound to *table_name*.
+
+    Schema
+    ------
+    item_id    TEXT  PRIMARY KEY  — stable unique ID extracted from the response
+    url        TEXT  NULLABLE     — the source URL that was fetched
+    raw_json   JSONB NULLABLE     — full response payload for the item
+    scraped_at TIMESTAMPTZ        — when this row was written
+    """
+    if table_name in _item_model_cache:
+        return _item_model_cache[table_name]
+
+    class ScrapedItem(BaseModel):
+        item_id = TextField(primary_key=True)
+        url = TextField(null=True)
+        raw_json = BinaryJSONField(null=True)
+        scraped_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+        class Meta:
+            pass  # table_name set dynamically below
+
+    # Peewee reads table_name from Meta at class-creation time, so we patch it.
+    ScrapedItem._meta.table_name = table_name
+    ScrapedItem.__name__ = f"ScrapedItem_{table_name}"
+
+    _item_model_cache[table_name] = ScrapedItem
+    return ScrapedItem

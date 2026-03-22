@@ -43,6 +43,23 @@ class HasDataClient:
 
         raise RuntimeError(f"Max retries exceeded for: {url}")
 
+    def fetch(self, api_path: str, params: dict) -> tuple[str, dict]:
+        """
+        Generic GET against any HasData endpoint.
+
+        Parameters
+        ----------
+        api_path : HasData API path, e.g. "/scrape/zillow/property"
+        params   : query parameters dict
+
+        Returns
+        -------
+        (request_url, response_dict)
+        """
+        base = "https://api.hasdata.com"
+        url = f"{base}{api_path}?{urlencode(params)}"
+        return url, self._get(url)
+
     def fetch_listings_page(
         self,
         location: str,
