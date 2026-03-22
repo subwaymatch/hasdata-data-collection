@@ -12,7 +12,6 @@ zillow-scraper/
 └── src/
     └── zillow_scraper/
         ├── __init__.py
-        ├── cli.py              # Typer CLI entry point
         ├── config.py           # Settings loaded from .env
         ├── db.py               # DB init, dedup helpers, upsert logic
         ├── hasdata.py          # HasData API client with retry/backoff
@@ -30,24 +29,48 @@ pip install -e .
 cp .env.example .env
 # edit .env — add HASDATA_API_KEY and POSTGRES_DSN
 
-# 3. Create tables
-zillow-scraper init-db
+# 3. Create tables (Python script usage)
+python - <<'PY'
+from scraper.db import init_db, close_db
+from scraper.config import settings
+
+init_db(settings.postgres_dsn)
+close_db()
+PY
 ```
 
 ## Usage
 
-```bash
-# Scrape default location + type (from .env)
-zillow-scraper scrape
+### From a `.py` script (no CLI)
 
-# Override location and listing type
-zillow-scraper scrape --location "Urbana, IL" --type forSale
+```python
+from scraper.config import settings
+from scraper.db import init_db, close_db
+from scraper.scraper import scrape
 
-# Force re-fetch even for pages already in the DB
-zillow-scraper scrape --force
+init_db(settings.postgres_dsn)
+try:
+    scrape(
+        location=settings.default_location,
+        listing_type=settings.default_listing_type,
+        skip_done=True,     # set False to force re-fetch
+        hide_55_plus=True,  # set False to include 55+ communities
+        delay=1.0,
+    )
+finally:
+    close_db()
+```
 
-# Slower, polite delay between requests
-zillow-scraper scrape --delay 2.0
+### From a `.ipynb` notebook cell (no CLI)
+
+```python
+from scraper.config import settings
+from scraper.db import init_db, close_db
+from scraper.scraper import scrape
+
+init_db(settings.postgres_dsn)
+scrape(location="Urbana, IL", listing_type="forSale", skip_done=True, delay=1.0)
+close_db()
 ```
 
 ## Database tables
