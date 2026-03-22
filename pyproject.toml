@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2", # Config via .env
     "rich>=13",             # Pretty terminal output
     "tenacity>=8",          # Retry logic
+    "peewee",
 ]
 
 [tool.hatch.build.targets.wheel]

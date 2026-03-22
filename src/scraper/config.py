@@ -17,7 +17,7 @@ class Settings:
     postgres_dsn: str = os.environ["POSTGRES_DSN"]
 
     # Local backup
-    backup_dir: Path = Path(os.getenv("BACKUP_DIR", "zillow_data"))
+    backup_dir: Path = Path(os.getenv("BACKUP_DIR", "scraped_json/zillow_listings"))
 
     # Scraper behaviour
     default_listing_type: str = os.getenv("DEFAULT_LISTING_TYPE", "sold")
