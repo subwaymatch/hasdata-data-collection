@@ -216,5 +216,6 @@ scraped_json/
     └── https:__www.glassdoor.com_job-listing_....json
 ```
 
-On reruns, existing backup files are loaded directly — no API call is made.
-This lets you safely restart after a crash without burning API credits.
+On reruns, `scraped_pages` is used to skip already-processed paginated URLs.
+Backups are still written for auditing/recovery, but scraping does not read
+from local JSON cache.

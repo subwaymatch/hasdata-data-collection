@@ -12,7 +12,7 @@ Each EndpointConfig describes:
 Adding a new endpoint requires only a new entry in ENDPOINTS.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Optional
 
 
