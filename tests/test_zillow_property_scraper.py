@@ -6,13 +6,16 @@ os.environ.setdefault("POSTGRES_DSN", "postgresql://user:pass@localhost:5432/tes
 from scraper.endpoints import ENDPOINTS
 from scraper import generic_scraper
 
+SOURCE_URL = "https://www.zillow.com/homedetails/example/65290913_zpid/"
+ZILLOW_PROPERTY_RESPONSE = {"property": {"zpid": 65290913, "url": SOURCE_URL}}
+
 
 def test_zillow_property_id_extractor_uses_zpid():
     item = {"zpid": 65290913}
     assert ENDPOINTS["zillow_property"].id_extractor(item) == "65290913"
 
 
-def test_scrape_per_item_extracts_zpid_and_upserts(monkeypatch):
+def test_scrape_per_item_upserts_with_zpid(monkeypatch):
     config = ENDPOINTS["zillow_property"]
     upserted = []
 
@@ -20,7 +23,7 @@ def test_scrape_per_item_extracts_zpid_and_upserts(monkeypatch):
     monkeypatch.setattr(
         generic_scraper,
         "get_source_urls",
-        lambda *_: ["https://www.zillow.com/homedetails/example/65290913_zpid/"],
+        lambda *_: [SOURCE_URL],
     )
     monkeypatch.setattr(generic_scraper, "is_item_scraped", lambda *_: False)
     monkeypatch.setattr(generic_scraper.time, "sleep", lambda *_: None)
@@ -39,9 +42,7 @@ def test_scrape_per_item_extracts_zpid_and_upserts(monkeypatch):
             return None
 
         def fetch(self, *_):
-            return "https://api.hasdata.com/scrape/zillow/property?url=...", {
-                "property": {"zpid": 65290913, "url": "https://www.zillow.com/homedetails/example/65290913_zpid/"}
-            }
+            return f"https://api.hasdata.com/scrape/zillow/property?url={SOURCE_URL}", ZILLOW_PROPERTY_RESPONSE
 
     monkeypatch.setattr(generic_scraper, "HasDataClient", FakeClient)
 
