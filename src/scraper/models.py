@@ -121,7 +121,7 @@ def get_item_model(table_name: str) -> type:
         item_id = TextField(primary_key=True)
         url = TextField(null=True)
         raw_json = BinaryJSONField(null=True)
-        scraped_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+        scraped_at = DateTimeField()
 
         class Meta:
             pass  # table_name set dynamically below
