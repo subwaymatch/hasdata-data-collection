@@ -16,7 +16,6 @@ Two modes:
 
 import hashlib
 import json
-import os
 import time
 from pathlib import Path
 from urllib.parse import urlencode
@@ -131,42 +130,29 @@ def scrape_paginated(
             backup_path = _page_backup_path(config, page, page_label)
 
             # ---------------------------------------------------------------- #
-            # 1. Load from local JSON cache if file exists                     #
+            # 1. Skip if already recorded in DB (resume after crash)           #
             # ---------------------------------------------------------------- #
-            if backup_path.exists():
+            if skip_done and is_page_done(request_url):
                 console.print(
-                    f"  [dim]CACHE[/dim]  [{label}] page {page} → {backup_path}"
+                    f"  [dim]SKIP[/dim]   [{label}] page {page} (already in DB)"
                 )
-                with open(backup_path) as f:
-                    data = json.load(f)
-
-            else:
-                # ----------------------------------------------------------  #
-                # 2. Skip if already recorded in DB (resume after crash)      #
-                # ----------------------------------------------------------  #
-                if skip_done and is_page_done(request_url):
-                    console.print(
-                        f"  [dim]SKIP[/dim]   [{label}] page {page} (already in DB)"
-                    )
-                    page += 1
-                    continue
-
-                # ----------------------------------------------------------  #
-                # 3. Fetch from HasData                                        #
-                # ----------------------------------------------------------  #
-                console.print(
-                    f"  [cyan]FETCH[/cyan]  [{label}] page {page} → {request_url}"
-                )
-                request_url, data = client.fetch(config.api_path, params)
-
-                with open(backup_path, "w") as f:
-                    json.dump(data, f, indent=2)
-                console.print(f"           saved → {backup_path}")
-
-                time.sleep(delay)
+                page += 1
+                continue
 
             # ---------------------------------------------------------------- #
-            # 4. Upsert items                                                   #
+            # 2. Fetch from HasData                                             #
+            # ---------------------------------------------------------------- #
+            console.print(f"  [cyan]FETCH[/cyan]  [{label}] page {page} → {request_url}")
+            request_url, data = client.fetch(config.api_path, params)
+
+            with open(backup_path, "w") as f:
+                json.dump(data, f, indent=2)
+            console.print(f"           saved → {backup_path}")
+
+            time.sleep(delay)
+
+            # ---------------------------------------------------------------- #
+            # 3. Upsert items                                                   #
             # ---------------------------------------------------------------- #
             items = _extract_items(config, data)
             if not items:
@@ -193,7 +179,7 @@ def scrape_paginated(
             )
 
             # ---------------------------------------------------------------- #
-            # 5. Advance pagination                                             #
+            # 4. Advance pagination                                             #
             # ---------------------------------------------------------------- #
             pagination = data.get("pagination", {})
             if not _has_next_page(pagination, page):
@@ -244,35 +230,12 @@ def scrape_per_item(
             backup_path = _item_backup_path(config, source_url)
 
             # ---------------------------------------------------------------- #
-            # 1. Load from local JSON cache if file exists                     #
-            # ---------------------------------------------------------------- #
-            if backup_path.exists():
-                with open(backup_path) as f:
-                    data = json.load(f)
-                items = _extract_items(config, data)
-                if not items:
-                    console.print(
-                        f"  [dim]CACHE-EMPTY[/dim] {source_url} — no data in cache"
-                    )
-                    continue
-                item = items[0]
-                item_id = config.id_extractor(item)
-
-                if skip_done and is_item_scraped(config.table_name, item_id):
-                    console.print(f"  [dim]SKIP[/dim]   {item_id}")
-                    continue
-
-                console.print(f"  [dim]CACHE[/dim]  {item_id} → {backup_path}")
-                upsert_item(config.table_name, item_id, source_url, item)
-                continue
-
-            # ---------------------------------------------------------------- #
-            # 2. Skip if already in target table (URL-keyed endpoints only)   #
+            # 1. Skip if already in target table (URL-keyed endpoints only)   #
             # ---------------------------------------------------------------- #
             # We can only check the DB early when item_id == source_url, i.e.
             # when id_extractor simply returns item["url"].  For numeric-ID
             # endpoints (e.g. Zillow property), the zpid is only known after
-            # fetching; those are handled by the backup-file check above.
+            # fetching.
             if skip_done:
                 try:
                     prospective_id = config.id_extractor({"url": source_url})
@@ -285,7 +248,7 @@ def scrape_per_item(
                     continue
 
             # ---------------------------------------------------------------- #
-            # 3. Fetch from HasData                                             #
+            # 2. Fetch from HasData                                             #
             # ---------------------------------------------------------------- #
             console.print(f"  [cyan]FETCH[/cyan]  {source_url}")
             try:

@@ -4,7 +4,6 @@ Core scraping pipeline.
 Reproduces the logic from your original notebook's scrape() function,
 with added features:
   - Skip pages already tracked in scraped_pages (resume support)
-  - Load from local JSON cache if the file exists
   - Save JSON backup before touching the database
   - Upsert properties via Peewee
 """
@@ -70,60 +69,39 @@ def scrape(
             backup_path = _get_backup_path(location, listing_type, page)
 
             # ---------------------------------------------------------------- #
-            # 1. Load from local cache if available                            #
+            # 1. Skip if already in DB (resume after interruption)             #
             # ---------------------------------------------------------------- #
-            if os.path.exists(backup_path):
-                console.print(f"  [dim]CACHE[/dim]  page {page} → {backup_path}")
-                with open(backup_path) as f:
-                    data = json.load(f)
-                # Reconstruct the URL for dedup tracking
-                from urllib.parse import urlencode
-                params = {
-                    "keyword": location,
-                    "type": listing_type,
-                    "hide55plusCommunities": str(hide_55_plus).lower(),
-                    "page": page,
-                }
-                url = f"{settings.hasdata_base_url}?{urlencode(params)}"
+            # We need to know the URL before checking; build it manually.
+            from urllib.parse import urlencode
 
-            else:
-                # ----------------------------------------------------------  #
-                # 2. Skip if already in DB (resume after interruption)        #
-                # ----------------------------------------------------------  #
-                # We need to know the URL before checking; build it manually.
-                from urllib.parse import urlencode
-                params = {
-                    "keyword": location,
-                    "type": listing_type,
-                    "hide55plusCommunities": str(hide_55_plus).lower(),
-                    "page": page,
-                }
-                url = f"{settings.hasdata_base_url}?{urlencode(params)}"
+            params = {
+                "keyword": location,
+                "type": listing_type,
+                "hide55plusCommunities": str(hide_55_plus).lower(),
+                "page": page,
+            }
+            url = f"{settings.hasdata_base_url}?{urlencode(params)}"
 
-                if skip_done and is_page_done(url):
-                    console.print(f"  [dim]SKIP[/dim]   page {page} (already in DB)")
-                    # We still need to advance pagination — peek at the backup
-                    # or just increment; no backup means we must fetch.
-                    page += 1
-                    continue
-
-                # ----------------------------------------------------------  #
-                # 3. Fetch from HasData                                        #
-                # ----------------------------------------------------------  #
-                console.print(f"  [cyan]FETCH[/cyan]  page {page} → {url}")
-                url, data = client.fetch_listings_page(
-                    location, listing_type, page, hide_55_plus
-                )
-
-                # Save JSON backup immediately after a successful fetch
-                with open(backup_path, "w") as f:
-                    json.dump(data, f, indent=2)
-                console.print(f"           saved → {backup_path}")
-
-                time.sleep(delay)
+            if skip_done and is_page_done(url):
+                console.print(f"  [dim]SKIP[/dim]   page {page} (already in DB)")
+                page += 1
+                continue
 
             # ---------------------------------------------------------------- #
-            # 4. Process properties                                             #
+            # 2. Fetch from HasData                                             #
+            # ---------------------------------------------------------------- #
+            console.print(f"  [cyan]FETCH[/cyan]  page {page} → {url}")
+            url, data = client.fetch_listings_page(location, listing_type, page, hide_55_plus)
+
+            # Save JSON backup immediately after a successful fetch
+            with open(backup_path, "w") as f:
+                json.dump(data, f, indent=2)
+            console.print(f"           saved → {backup_path}")
+
+            time.sleep(delay)
+
+            # ---------------------------------------------------------------- #
+            # 3. Process properties                                             #
             # ---------------------------------------------------------------- #
             properties = data.get("properties", [])
 
@@ -144,7 +122,7 @@ def scrape(
             )
 
             # ---------------------------------------------------------------- #
-            # 5. Advance to next page                                           #
+            # 4. Advance to next page                                           #
             # ---------------------------------------------------------------- #
             pagination = data.get("pagination", {})
             if not pagination.get("nextPage"):
