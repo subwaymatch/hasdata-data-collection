@@ -17,7 +17,10 @@ class Settings:
     postgres_dsn: str = os.environ["POSTGRES_DSN"]
 
     # Local backup
+    # backup_dir: per-endpoint subdirectory (kept for backward compat with scraper.py)
     backup_dir: Path = Path(os.getenv("BACKUP_DIR", "scraped_json/zillow_listings"))
+    # Base directory under which each endpoint creates its own subdirectory
+    scraped_json_base_dir: Path = Path(os.getenv("SCRAPED_JSON_BASE_DIR", "scraped_json"))
 
     # Scraper behaviour
     default_listing_type: str = os.getenv("DEFAULT_LISTING_TYPE", "sold")
@@ -28,6 +31,7 @@ class Settings:
 
     def __init__(self):
         self.backup_dir.mkdir(parents=True, exist_ok=True)
+        self.scraped_json_base_dir.mkdir(parents=True, exist_ok=True)
 
 
 settings = Settings()
