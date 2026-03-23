@@ -128,11 +128,7 @@ def upsert_properties(properties: list[dict], listing_type: str) -> int:
         )
 
     # Bulk insert — skip rows whose property_id already exists
-    (
-        ZillowListing.insert_many(rows)
-        .on_conflict_ignore()
-        .execute()
-    )
+    (ZillowListing.insert_many(rows).on_conflict_ignore().execute())
 
     return len(rows)
 
@@ -151,9 +147,8 @@ def is_item_scraped(table_name: str, item_id: str) -> bool:
 def upsert_item(table_name: str, item_id: str, url: str, raw_json: dict) -> None:
     """Insert a scraped item into *table_name*; silently skip if it already exists."""
     model = get_item_model(table_name)
-    now = datetime.now(timezone.utc)
     (
-        model.insert(item_id=item_id, url=url, raw_json=raw_json, scraped_at=now)
+        model.insert(item_id=item_id, url=url, raw_json=raw_json)
         .on_conflict_ignore()
         .execute()
     )
