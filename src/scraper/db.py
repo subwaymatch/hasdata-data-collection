@@ -148,7 +148,7 @@ def upsert_item(table_name: str, item_id: str, url: str, raw_json: dict) -> None
     """Insert a scraped item into *table_name*; silently skip if it already exists."""
     model = get_item_model(table_name)
     (
-        model.insert(item_id=item_id, url=url, raw_json=raw_json)
+        model.insert(item_id=item_id, url=url, raw_json=raw_json, scraped_at=datetime.now(timezone.utc))
         .on_conflict_ignore()
         .execute()
     )
