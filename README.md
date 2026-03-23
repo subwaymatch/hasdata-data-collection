@@ -1,22 +1,28 @@
 # hasdata-data-collection
 
-Scrapes data via the [HasData](https://hasdata.com) API, upserts structured data to Postgres (via [Peewee ORM](https://docs.peewee-orm.com)), and keeps local JSON backups of every page response. Track scraped page URLs in a `scraped_pages` table to enable safe re-runs without duplicate API calls.
+Scrapes data via the [HasData](https://hasdata.com) API, inserts structured data to Postgres (via [Peewee ORM](https://docs.peewee-orm.com)), and keeps local JSON backups of every response. A `scraped_pages` table tracks which paginated URLs have already been fetched so reruns are safe and idempotent.
 
 ## Project layout
 
 ```
 hasdata-data-collection/
 ├── pyproject.toml
-├── .env                        # copy from .env.example and fill in
+├── .env                              # copy from .env.example and fill in
 ├── .env.example
 └── src/
+    ├── scrape_zillow.py              # Zillow listing search
+    ├── scrape_zillow_properties.py   # Zillow property details (reads zillow_listings)
+    ├── scrape_glassdoor_listings.py  # Glassdoor job listing search
+    ├── scrape_glassdoor_jobs.py      # Glassdoor job details (reads glassdoor_listings)
     └── scraper/
         ├── __init__.py
         ├── config.py           # Settings loaded from .env
-        ├── db.py               # DB init, dedup helpers, upsert logic
+        ├── db.py               # DB init, dedup helpers, insert logic
+        ├── endpoints.py        # EndpointConfig registry — add new APIs here
+        ├── generic_scraper.py  # scrape_paginated / scrape_per_item
         ├── hasdata.py          # HasData API client with retry/backoff
-        ├── models.py           # Peewee ORM models (ScrapedPage, ZillowListing)
-        └── scraper.py          # Pagination loop
+        ├── models.py           # Peewee ORM models
+        └── scraper.py          # Zillow listing pagination loop (legacy)
 ```
 
 ## Setup
@@ -27,11 +33,17 @@ pip install -e .
 
 # 2. Configure
 cp .env.example .env
-# edit .env — add HASDATA_API_KEY and POSTGRES_DSN
+# edit .env — set HASDATA_API_KEY and POSTGRES_DSN
 ```
 
+## Endpoints & usage examples
+
+### 1. Zillow listing search → `zillow_listings`
+
+Paginates through Zillow search results for a location and listing type.
+Local backups written to `scraped_json/zillow_listings/`.
+
 ```python
-# 3. Create tables (Python script usage)
 from scraper.config import settings
 from scraper.db import close_db, init_db
 from scraper.scraper import scrape
@@ -39,36 +51,121 @@ from scraper.scraper import scrape
 init_db(settings.postgres_dsn)
 try:
     scrape(
-        location=settings.default_location,
-        listing_type=settings.default_listing_type,
-        skip_done=True,  # set False to force re-fetch
-        hide_55_plus=True,  # set False to include 55+ communities
+        location="Champaign, IL",
+        listing_type="sold",   # "sold" | "forSale" | "forRent"
+        skip_done=True,
+        hide_55_plus=True,
         delay=1.0,
     )
 finally:
     close_db()
-
-
 ```
+
+### 2. Zillow property details → `zillow_properties`
+
+Fetches full property details for every URL already in `zillow_listings`.
+Requires running the listing scraper first.
+Local backups written to `scraped_json/zillow_properties/`.
+
+```python
+from scraper.config import settings
+from scraper.db import close_db, init_db
+from scraper.endpoints import ENDPOINTS
+from scraper.generic_scraper import scrape_per_item
+
+init_db(settings.postgres_dsn)
+try:
+    scrape_per_item(
+        config=ENDPOINTS["zillow_property"],
+        skip_done=True,
+        delay=1.0,
+    )
+finally:
+    close_db()
+```
+
+### 3. Glassdoor job listing search → `glassdoor_listings`
+
+Paginates through Glassdoor job search results for a keyword and location.
+Local backups written to `scraped_json/glassdoor_listings/`.
+
+```python
+from scraper.config import settings
+from scraper.db import close_db, init_db
+from scraper.endpoints import ENDPOINTS
+from scraper.generic_scraper import scrape_paginated
+
+base_params = {
+    "keyword": "software engineer",
+    "location": "United States",
+    "sort": "recent",           # "recent" | "relevance"
+    "domain": "www.glassdoor.com",
+}
+
+init_db(settings.postgres_dsn)
+try:
+    scrape_paginated(
+        config=ENDPOINTS["glassdoor_listing"],
+        base_params=base_params,
+        skip_done=True,
+        delay=1.0,
+        page_label="software engineer @ United States",
+    )
+finally:
+    close_db()
+```
+
+### 4. Glassdoor job details → `glassdoor_jobs`
+
+Fetches full job details for every listing URL already in `glassdoor_listings`.
+Requires running the Glassdoor listing scraper first.
+Local backups written to `scraped_json/glassdoor_jobs/`.
+
+```python
+from scraper.config import settings
+from scraper.db import close_db, init_db
+from scraper.endpoints import ENDPOINTS
+from scraper.generic_scraper import scrape_per_item
+
+init_db(settings.postgres_dsn)
+try:
+    scrape_per_item(
+        config=ENDPOINTS["glassdoor_job"],
+        skip_done=True,
+        delay=1.0,
+    )
+finally:
+    close_db()
+```
+
+## Adding a new endpoint
+
+1. Add an `EndpointConfig` entry to `ENDPOINTS` in `src/scraper/endpoints.py`.
+2. Create an entry-point script in `src/` (copy one of the existing ones as a template).
+
+Each endpoint automatically gets:
+- Its own Postgres table (`item_id TEXT PK`, `url TEXT`, `raw_json JSONB`, `scraped_at TIMESTAMPTZ`)
+- Its own backup subdirectory under `scraped_json/<backup_subdir>/`
+- Idempotent inserts — existing rows are never overwritten
 
 ## Database tables
 
 ### `scraped_pages`
 
-Tracks every HasData page URL that has been successfully fetched. This is the dedup/resume key — re-running the scraper will skip any URL already present here (unless `--force` is passed).
+Tracks every HasData paginated URL that has been successfully fetched.
 
 | Column           | Type        | Notes                              |
 | ---------------- | ----------- | ---------------------------------- |
 | `url`            | TEXT (UQ)   | Full HasData request URL           |
-| `location`       | TEXT        | e.g. `Champaign, IL`               |
-| `listing_type`   | TEXT        | e.g. `sold`                        |
+| `location`       | TEXT        |                                    |
+| `listing_type`   | TEXT        |                                    |
 | `page_number`    | INTEGER     |                                    |
-| `property_count` | INTEGER     | Properties upserted from this page |
+| `property_count` | INTEGER     | Items inserted from this page      |
 | `scraped_at`     | TIMESTAMPTZ |                                    |
 
 ### `zillow_listings`
 
-One row per Zillow property, upserted on `property_id` (Zillow zpid). Re-scraping updates `price`, `status`, `zestimate`, `rent_zestimate`, `days_on_zillow`, `raw_json`, and `updated_at`.
+One row per Zillow property. Existing rows are not overwritten on rerun.
 
 | Column                      | Type        |
 | --------------------------- | ----------- |
@@ -92,12 +189,32 @@ One row per Zillow property, upserted on `property_id` (Zillow zpid). Re-scrapin
 | `created_at`                | TIMESTAMPTZ |
 | `updated_at`                | TIMESTAMPTZ |
 
+### Generic endpoint tables (`zillow_properties`, `glassdoor_listings`, `glassdoor_jobs`, …)
+
+All endpoints added through `EndpointConfig` share the same schema:
+
+| Column      | Type        | Notes                              |
+| ----------- | ----------- | ---------------------------------- |
+| `item_id`   | TEXT PK     | Stable unique ID from the response |
+| `url`       | TEXT        | Source URL that was fetched        |
+| `raw_json`  | JSONB       | Full response payload              |
+| `scraped_at`| TIMESTAMPTZ |                                    |
+
 ## Local backups
 
-Every page response is saved as:
+Every response is saved as a JSON file before any DB write:
 
 ```
-zillow_data/zillow-listings-champaign-il-sold-page-01.json
+scraped_json/
+├── zillow_listings/
+│   └── zillow_listing-champaign,-il-page-001.json
+├── zillow_properties/
+│   └── 346891592.json
+├── glassdoor_listings/
+│   └── glassdoor_listing-software-engineer-@-united-states-page-001.json
+└── glassdoor_jobs/
+    └── https:__www.glassdoor.com_job-listing_....json
 ```
 
-On reruns, if the local file already exists it is loaded directly (no API call made). This means you can safely re-run after a crash without burning API credits.
+On reruns, existing backup files are loaded directly — no API call is made.
+This lets you safely restart after a crash without burning API credits.

@@ -127,21 +127,10 @@ def upsert_properties(properties: list[dict], listing_type: str) -> int:
             }
         )
 
-    # Peewee bulk upsert — conflict on primary key (property_id)
+    # Bulk insert — skip rows whose property_id already exists
     (
         ZillowListing.insert_many(rows)
-        .on_conflict(
-            conflict_target=[ZillowListing.property_id],
-            update={
-                ZillowListing.price: ZillowListing.price,  # use EXCLUDED value
-                ZillowListing.status: ZillowListing.status,
-                ZillowListing.zestimate: ZillowListing.zestimate,
-                ZillowListing.rent_zestimate: ZillowListing.rent_zestimate,
-                ZillowListing.days_on_zillow: ZillowListing.days_on_zillow,
-                ZillowListing.raw_json: ZillowListing.raw_json,
-                ZillowListing.updated_at: now,
-            },
-        )
+        .on_conflict_ignore()
         .execute()
     )
 
@@ -160,15 +149,12 @@ def is_item_scraped(table_name: str, item_id: str) -> bool:
 
 
 def upsert_item(table_name: str, item_id: str, url: str, raw_json: dict) -> None:
-    """Insert or update a single scraped item in *table_name*."""
+    """Insert a scraped item into *table_name*; silently skip if it already exists."""
     model = get_item_model(table_name)
     now = datetime.now(timezone.utc)
     (
         model.insert(item_id=item_id, url=url, raw_json=raw_json, scraped_at=now)
-        .on_conflict(
-            conflict_target=[model.item_id],
-            update={model.raw_json: raw_json, model.scraped_at: now},
-        )
+        .on_conflict_ignore()
         .execute()
     )
 
