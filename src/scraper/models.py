@@ -47,6 +47,7 @@ class ScrapedPage(BaseModel):
     listing_type = TextField()    # e.g. "sold", "forSale"
     page_number = IntegerField()
     property_count = IntegerField(default=0)  # how many properties were on the page
+    has_next_page = BooleanField(null=True)   # whether the response had a next page
     scraped_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
 
     class Meta:
