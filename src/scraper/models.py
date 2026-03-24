@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from peewee import (
     BigIntegerField,
     BooleanField,
+    DateField,
     DateTimeField,
     FloatField,
     IntegerField,
@@ -113,7 +114,7 @@ class ZillowProperty(BaseModel):
     home_type = TextField(null=True)
     status = TextField(null=True)
     true_status = TextField(null=True)
-    date_posted = TextField(null=True)
+    date_posted = DateField(null=True)
     days_on_zillow = IntegerField(null=True)
     price = IntegerField(null=True)
     last_sold_price = IntegerField(null=True)
@@ -221,7 +222,7 @@ class ZillowProperty(BaseModel):
     reso_below_grade_finished_area = TextField(null=True)
     reso_parcel_number = TextField(null=True)
     reso_price_per_square_foot = IntegerField(null=True)
-    reso_on_market_date = BigIntegerField(null=True)
+    reso_on_market_date = DateTimeField(null=True)
     reso_listing_terms = TextField(null=True)
     reso_special_listing_conditions = TextField(null=True)
     reso_lot_size_dimensions = TextField(null=True)
@@ -261,6 +262,9 @@ class ZillowProperty(BaseModel):
     reso_foundation_details = BinaryJSONField(null=True)
     reso_lot_features = BinaryJSONField(null=True)
     reso_association_fee_includes = BinaryJSONField(null=True)
+    reso_security_features = BinaryJSONField(null=True)
+    reso_electric = BinaryJSONField(null=True)
+    reso_association_amenities = BinaryJSONField(null=True)
 
     # Full raw response payload
     raw_json = BinaryJSONField(null=True)
@@ -269,6 +273,23 @@ class ZillowProperty(BaseModel):
 
     class Meta:
         table_name = "zillow_properties"
+
+
+class LogMissingField(BaseModel):
+    """
+    Records JSON response fields that have no corresponding column in the
+    target table.  Used to surface missing mappings without crashing the
+    scraper.  Shared across all endpoints (Zillow, Glassdoor, etc.).
+    """
+
+    table_name = TextField()     # e.g. "zillow_properties"
+    missing_column = TextField() # e.g. "resoData.zoning"
+
+    class Meta:
+        table_name = "log_missing_fields"
+        indexes = (
+            (("table_name", "missing_column"), True),  # unique together
+        )
 
 
 # ---------------------------------------------------------------------------
