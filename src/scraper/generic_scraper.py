@@ -227,7 +227,6 @@ def scrape_per_item(
     with HasDataClient() as client:
         for source_url in source_urls:
             params = {config.source_url_param: source_url}
-            backup_path = _item_backup_path(config, source_url)
 
             # ---------------------------------------------------------------- #
             # 1. Skip if already in target table (URL-keyed endpoints only)   #
@@ -264,6 +263,7 @@ def scrape_per_item(
 
             item = items[0]
             item_id = config.id_extractor(item)
+            backup_path = _item_backup_path(config, item_id)
 
             # Save backup before touching DB
             with open(backup_path, "w") as f:

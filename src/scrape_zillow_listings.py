@@ -48,7 +48,10 @@ try:
             beds_label = (
                 f"beds-{beds_min}-{beds_max}" if beds_max is not None else f"beds-{beds_min}plus"
             )
-            page_label = f"year-{year}-{beds_label}"
+            location_label = (
+                LOCATION.lower().replace(",", "").replace(" ", "-")
+            )
+            page_label = f"{location_label}-{LISTING_TYPE}-year-{year}-{beds_label}"
 
             base_params: dict = {
                 "keyword": LOCATION,
