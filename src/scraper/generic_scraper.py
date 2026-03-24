@@ -167,6 +167,14 @@ def scrape_paginated(
                 console.print(
                     f"  [yellow]EMPTY[/yellow]  [{label}] page {page} — stopping."
                 )
+                mark_page_done(
+                    url=request_url,
+                    location=page_label,
+                    listing_type=config.name,
+                    page_number=page,
+                    property_count=0,
+                    has_next_page=False,
+                )
                 break
 
             for item in items:

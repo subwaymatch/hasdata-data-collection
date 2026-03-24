@@ -107,6 +107,13 @@ def scrape(
 
             if not properties:
                 console.print(f"  [yellow]EMPTY[/yellow]  page {page} — stopping.")
+                mark_page_done(
+                    url=url,
+                    location=location,
+                    listing_type=listing_type,
+                    page_number=page,
+                    property_count=0,
+                )
                 break
 
             count = upsert_properties(properties, listing_type)
