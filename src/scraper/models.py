@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 from peewee import (
     BigIntegerField,
+    BooleanField,
     DateTimeField,
     FloatField,
     IntegerField,
@@ -96,6 +97,178 @@ class ZillowListing(BaseModel):
 
     class Meta:
         table_name = "zillow_listings"
+
+
+class ZillowProperty(BaseModel):
+    """
+    One row per Zillow property detail page, with individual columns for
+    all expected response fields.  Container/list fields are stored as JSONB.
+    """
+
+    # Primary key (Zillow zpid)
+    property_id = BigIntegerField(primary_key=True)
+
+    # Top-level scalar fields
+    url = TextField(null=True)
+    home_type = TextField(null=True)
+    status = TextField(null=True)
+    true_status = TextField(null=True)
+    date_posted = TextField(null=True)
+    days_on_zillow = IntegerField(null=True)
+    price = IntegerField(null=True)
+    last_sold_price = IntegerField(null=True)
+    currency = TextField(null=True)
+    description = TextField(null=True)
+    beds = IntegerField(null=True)
+    baths = FloatField(null=True)
+    year_built = IntegerField(null=True)
+    image = TextField(null=True)
+    down_payment_assistance = BooleanField(null=True)
+    foreclosure_judicial_type = TextField(null=True)
+
+    # Geo (from geo object)
+    latitude = FloatField(null=True)
+    longitude = FloatField(null=True)
+
+    # Area (from area object)
+    lot_size = IntegerField(null=True)
+    living_area = IntegerField(null=True)
+    lot_area_value = FloatField(null=True)
+    lot_area_units = TextField(null=True)
+    lot_size_raw = TextField(null=True)
+    living_area_raw = TextField(null=True)
+    living_area_units = TextField(null=True)
+    living_area_units_short = TextField(null=True)
+
+    # Address (from address object)
+    address_street = TextField(null=True)
+    address_city = TextField(null=True)
+    address_state = TextField(null=True)
+    address_zipcode = TextField(null=True)
+    address_county = TextField(null=True)
+    address_country = TextField(null=True)
+    address_raw = TextField(null=True)
+    county_fips = TextField(null=True)
+    address_undisclosed = BooleanField(null=True)
+    address_parent_region = TextField(null=True)
+    address_subdivision = TextField(null=True)
+
+    # Agent info (from agentInfo object)
+    agent_name = TextField(null=True)
+    broker_name = TextField(null=True)
+    buyer_agent_name = TextField(null=True)
+    buyer_broker_name = TextField(null=True)
+    agent_phone_number = TextField(null=True)
+    broker_phone_number = TextField(null=True)
+
+    # Zestimate (from zestimate object)
+    zestimate = IntegerField(null=True)
+    rent_zestimate = IntegerField(null=True)
+    rent_zestimate_url = TextField(null=True)
+    zestimate_low_percent = FloatField(null=True)
+    zestimate_high_percent = FloatField(null=True)
+
+    # Parcel (from parcelData object)
+    parcel_id = TextField(null=True)
+    parcel_number = TextField(null=True)
+
+    # resoData scalar fields
+    reso_attic = TextField(null=True)
+    reso_stories = IntegerField(null=True)
+    reso_stories_decimal = FloatField(null=True)
+    reso_basement = TextField(null=True)
+    reso_basement_yn = BooleanField(null=True)
+    reso_bedrooms = IntegerField(null=True)
+    reso_bathrooms = FloatField(null=True)
+    reso_bathrooms_full = IntegerField(null=True)
+    reso_bathrooms_half = IntegerField(null=True)
+    reso_bathrooms_float = FloatField(null=True)
+    reso_home_type = TextField(null=True)
+    reso_roof_type = TextField(null=True)
+    reso_furnished = BooleanField(null=True)
+    reso_has_garage = BooleanField(null=True)
+    reso_has_attached_garage = BooleanField(null=True)
+    reso_has_open_parking = BooleanField(null=True)
+    reso_garage_parking_capacity = IntegerField(null=True)
+    reso_parking_capacity = IntegerField(null=True)
+    reso_covered_parking_capacity = IntegerField(null=True)
+    reso_ownership = TextField(null=True)
+    reso_architectural_style = TextField(null=True)
+    reso_has_cooling = BooleanField(null=True)
+    reso_has_heating = BooleanField(null=True)
+    reso_has_spa = BooleanField(null=True)
+    reso_has_view = BooleanField(null=True)
+    reso_has_fireplace = BooleanField(null=True)
+    reso_fireplaces = IntegerField(null=True)
+    reso_has_land_lease = BooleanField(null=True)
+    reso_has_home_warranty = BooleanField(null=True)
+    reso_is_new_construction = BooleanField(null=True)
+    reso_has_attached_property = BooleanField(null=True)
+    reso_has_additional_parcels = BooleanField(null=True)
+    reso_can_raise_horses = BooleanField(null=True)
+    reso_high_school = TextField(null=True)
+    reso_elementary_school = TextField(null=True)
+    reso_middle_or_junior_school = TextField(null=True)
+    reso_high_school_district = TextField(null=True)
+    reso_elementary_school_district = TextField(null=True)
+    reso_middle_or_junior_school_district = TextField(null=True)
+    reso_city_region = TextField(null=True)
+    reso_tax_annual_amount = FloatField(null=True)
+    reso_tax_assessed_value = IntegerField(null=True)
+    reso_living_area = TextField(null=True)
+    reso_lot_size = TextField(null=True)
+    reso_building_area = TextField(null=True)
+    reso_below_grade_finished_area = TextField(null=True)
+    reso_parcel_number = TextField(null=True)
+    reso_price_per_square_foot = IntegerField(null=True)
+    reso_on_market_date = BigIntegerField(null=True)
+    reso_listing_terms = TextField(null=True)
+    reso_special_listing_conditions = TextField(null=True)
+    reso_lot_size_dimensions = TextField(null=True)
+    reso_subdivision_name = TextField(null=True)
+
+    # Container / list fields stored as JSONB
+    photos = BinaryJSONField(null=True)
+    nearby = BinaryJSONField(null=True)
+    schools = BinaryJSONField(null=True)
+    tax_history = BinaryJSONField(null=True)
+    price_history = BinaryJSONField(null=True)
+    static_map_urls = BinaryJSONField(null=True)
+    listing_sub_types = BinaryJSONField(null=True)
+    agent_emails = BinaryJSONField(null=True)
+
+    # resoData container fields
+    reso_rooms = BinaryJSONField(null=True)
+    reso_room_types = BinaryJSONField(null=True)
+    reso_appliances = BinaryJSONField(null=True)
+    reso_sewer = BinaryJSONField(null=True)
+    reso_cooling = BinaryJSONField(null=True)
+    reso_heating = BinaryJSONField(null=True)
+    reso_flooring = BinaryJSONField(null=True)
+    reso_water_source = BinaryJSONField(null=True)
+    reso_fees_and_dues = BinaryJSONField(null=True)
+    reso_at_a_glance_facts = BinaryJSONField(null=True)
+    reso_parking_features = BinaryJSONField(null=True)
+    reso_laundry_features = BinaryJSONField(null=True)
+    reso_exterior_features = BinaryJSONField(null=True)
+    reso_interior_features = BinaryJSONField(null=True)
+    reso_community_features = BinaryJSONField(null=True)
+    reso_fireplace_features = BinaryJSONField(null=True)
+    reso_patio_and_porch_features = BinaryJSONField(null=True)
+    reso_property_sub_type = BinaryJSONField(null=True)
+    reso_construction_materials = BinaryJSONField(null=True)
+    reso_accessibility_features = BinaryJSONField(null=True)
+    reso_foundation_details = BinaryJSONField(null=True)
+    reso_lot_features = BinaryJSONField(null=True)
+    reso_association_fee_includes = BinaryJSONField(null=True)
+
+    # Full raw response payload
+    raw_json = BinaryJSONField(null=True)
+
+    scraped_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    class Meta:
+        table_name = "zillow_properties"
 
 
 # ---------------------------------------------------------------------------

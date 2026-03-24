@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
-from .models import ScrapedPage, ZillowListing, db, get_item_model
+from .models import ScrapedPage, ZillowListing, ZillowProperty, db, get_item_model
 
 # --------------------------------------------------------------------------- #
 #  Connection                                                                  #
@@ -40,11 +40,14 @@ def init_db(postgres_dsn: str) -> None:
         **connect_kwargs,
     )
     db.connect(reuse_if_open=True)
-    db.create_tables([ScrapedPage, ZillowListing], safe=True)
+    db.create_tables([ScrapedPage, ZillowListing, ZillowProperty], safe=True)
 
 
 def init_endpoint_table(table_name: str) -> None:
-    """Create the generic scraped-item table for *table_name* if it doesn't exist."""
+    """Create the table for *table_name* if it doesn't exist."""
+    if table_name == "zillow_properties":
+        db.create_tables([ZillowProperty], safe=True)
+        return
     model = get_item_model(table_name)
     db.create_tables([model], safe=True)
 
@@ -134,18 +137,194 @@ def upsert_properties(properties: list[dict], listing_type: str) -> int:
 
 
 # --------------------------------------------------------------------------- #
+#  ZillowProperty upsert (zillow_properties table)                            #
+# --------------------------------------------------------------------------- #
+
+
+def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
+    """Insert a Zillow property detail into zillow_properties with expanded columns."""
+    p = raw_json
+    geo = p.get("geo") or {}
+    area = p.get("area") or {}
+    address = p.get("address") or {}
+    agent = p.get("agentInfo") or {}
+    zest = p.get("zestimate") or {}
+    parcel = p.get("parcelData") or {}
+    reso = p.get("resoData") or {}
+
+    (
+        ZillowProperty.insert(
+            property_id=int(item_id),
+            url=p.get("url"),
+            home_type=p.get("homeType"),
+            status=p.get("status"),
+            true_status=p.get("trueStatus"),
+            date_posted=p.get("datePosted"),
+            days_on_zillow=p.get("daysOnZillow"),
+            price=p.get("price"),
+            last_sold_price=p.get("lastSoldPrice"),
+            currency=p.get("currency"),
+            description=p.get("description"),
+            beds=p.get("beds"),
+            baths=p.get("baths"),
+            year_built=p.get("yearBuilt"),
+            image=p.get("image"),
+            down_payment_assistance=p.get("downPaymentAssistance"),
+            foreclosure_judicial_type=p.get("foreclosureJudicialType"),
+            # Geo
+            latitude=geo.get("latitude"),
+            longitude=geo.get("longitude"),
+            # Area
+            lot_size=area.get("lotSize"),
+            living_area=area.get("livingArea"),
+            lot_area_value=area.get("lotAreaValue"),
+            lot_area_units=area.get("lotAreaUnits"),
+            lot_size_raw=area.get("lotSizeRaw"),
+            living_area_raw=area.get("livingAreaRaw"),
+            living_area_units=area.get("livingAreaUnits"),
+            living_area_units_short=area.get("livingAreaUnitsShort"),
+            # Address
+            address_street=address.get("street"),
+            address_city=address.get("city"),
+            address_state=address.get("state"),
+            address_zipcode=address.get("zipcode"),
+            address_county=address.get("county"),
+            address_country=address.get("country"),
+            address_raw=address.get("addressRaw"),
+            county_fips=address.get("countyFIPS"),
+            address_undisclosed=address.get("undisclosed"),
+            address_parent_region=address.get("parentRegion"),
+            address_subdivision=address.get("subdivision"),
+            # Agent info
+            agent_name=agent.get("agentName"),
+            broker_name=agent.get("brokerName"),
+            buyer_agent_name=agent.get("buyerAgentName"),
+            buyer_broker_name=agent.get("buyerBrokerName"),
+            agent_phone_number=agent.get("agentPhoneNumber"),
+            broker_phone_number=agent.get("brokerPhoneNumber"),
+            # Zestimate
+            zestimate=zest.get("zestimate"),
+            rent_zestimate=zest.get("rentZestimate"),
+            rent_zestimate_url=zest.get("rentZestimateURL"),
+            zestimate_low_percent=zest.get("zestimateLowPercent"),
+            zestimate_high_percent=zest.get("zestimateHighPercent"),
+            # Parcel
+            parcel_id=parcel.get("parcelId"),
+            parcel_number=parcel.get("parcelNumber"),
+            # resoData scalars
+            reso_attic=reso.get("attic"),
+            reso_stories=reso.get("stories"),
+            reso_stories_decimal=reso.get("storiesDecimal"),
+            reso_basement=reso.get("basement"),
+            reso_basement_yn=reso.get("basementYN"),
+            reso_bedrooms=reso.get("bedrooms"),
+            reso_bathrooms=reso.get("bathrooms"),
+            reso_bathrooms_full=reso.get("bathroomsFull"),
+            reso_bathrooms_half=reso.get("bathroomsHalf"),
+            reso_bathrooms_float=reso.get("bathroomsFloat"),
+            reso_home_type=reso.get("homeType"),
+            reso_roof_type=reso.get("roofType"),
+            reso_furnished=reso.get("furnished"),
+            reso_has_garage=reso.get("hasGarage"),
+            reso_has_attached_garage=reso.get("hasAttachedGarage"),
+            reso_has_open_parking=reso.get("hasOpenParking"),
+            reso_garage_parking_capacity=reso.get("garageParkingCapacity"),
+            reso_parking_capacity=reso.get("parkingCapacity"),
+            reso_covered_parking_capacity=reso.get("coveredParkingCapacity"),
+            reso_ownership=reso.get("ownership"),
+            reso_architectural_style=reso.get("architecturalStyle"),
+            reso_has_cooling=reso.get("hasCooling"),
+            reso_has_heating=reso.get("hasHeating"),
+            reso_has_spa=reso.get("hasSpa"),
+            reso_has_view=reso.get("hasView"),
+            reso_has_fireplace=reso.get("hasFireplace"),
+            reso_fireplaces=reso.get("fireplaces"),
+            reso_has_land_lease=reso.get("hasLandLease"),
+            reso_has_home_warranty=reso.get("hasHomeWarranty"),
+            reso_is_new_construction=reso.get("isNewConstruction"),
+            reso_has_attached_property=reso.get("hasAttachedProperty"),
+            reso_has_additional_parcels=reso.get("hasAdditionalParcels"),
+            reso_can_raise_horses=reso.get("canRaiseHorses"),
+            reso_high_school=reso.get("highSchool"),
+            reso_elementary_school=reso.get("elementarySchool"),
+            reso_middle_or_junior_school=reso.get("middleOrJuniorSchool"),
+            reso_high_school_district=reso.get("highSchoolDistrict"),
+            reso_elementary_school_district=reso.get("elementarySchoolDistrict"),
+            reso_middle_or_junior_school_district=reso.get("middleOrJuniorSchoolDistrict"),
+            reso_city_region=reso.get("cityRegion"),
+            reso_tax_annual_amount=reso.get("taxAnnualAmount"),
+            reso_tax_assessed_value=reso.get("taxAssessedValue"),
+            reso_living_area=reso.get("livingArea"),
+            reso_lot_size=reso.get("lotSize"),
+            reso_building_area=reso.get("buildingArea"),
+            reso_below_grade_finished_area=reso.get("belowGradeFinishedArea"),
+            reso_parcel_number=reso.get("parcelNumber"),
+            reso_price_per_square_foot=reso.get("pricePerSquareFoot"),
+            reso_on_market_date=reso.get("onMarketDate"),
+            reso_listing_terms=reso.get("listingTerms"),
+            reso_special_listing_conditions=reso.get("specialListingConditions"),
+            reso_lot_size_dimensions=reso.get("lotSizeDimensions"),
+            reso_subdivision_name=reso.get("subdivisionName"),
+            # Container / list fields
+            photos=p.get("photos"),
+            nearby=p.get("nearby"),
+            schools=p.get("schools"),
+            tax_history=p.get("taxHistory"),
+            price_history=p.get("priceHistory"),
+            static_map_urls=p.get("staticMapUrls"),
+            listing_sub_types=p.get("listingSubTypes"),
+            agent_emails=p.get("agentEmails"),
+            # resoData containers
+            reso_rooms=reso.get("rooms"),
+            reso_room_types=reso.get("roomTypes"),
+            reso_appliances=reso.get("appliances"),
+            reso_sewer=reso.get("sewer"),
+            reso_cooling=reso.get("cooling"),
+            reso_heating=reso.get("heating"),
+            reso_flooring=reso.get("flooring"),
+            reso_water_source=reso.get("waterSource"),
+            reso_fees_and_dues=reso.get("feesAndDues"),
+            reso_at_a_glance_facts=reso.get("atAGlanceFacts"),
+            reso_parking_features=reso.get("parkingFeatures"),
+            reso_laundry_features=reso.get("laundryFeatures"),
+            reso_exterior_features=reso.get("exteriorFeatures"),
+            reso_interior_features=reso.get("interiorFeatures"),
+            reso_community_features=reso.get("communityFeatures"),
+            reso_fireplace_features=reso.get("fireplaceFeatures"),
+            reso_patio_and_porch_features=reso.get("patioAndPorchFeatures"),
+            reso_property_sub_type=reso.get("propertySubType"),
+            reso_construction_materials=reso.get("constructionMaterials"),
+            reso_accessibility_features=reso.get("accessibilityFeatures"),
+            reso_foundation_details=reso.get("foundationDetails"),
+            reso_lot_features=reso.get("lotFeatures"),
+            reso_association_fee_includes=reso.get("associationFeeIncludes"),
+            # Full raw payload
+            raw_json=p,
+            scraped_at=datetime.now(timezone.utc),
+        )
+        .on_conflict_ignore()
+        .execute()
+    )
+
+
+# --------------------------------------------------------------------------- #
 #  Generic per-endpoint item helpers                                           #
 # --------------------------------------------------------------------------- #
 
 
 def is_item_scraped(table_name: str, item_id: str) -> bool:
     """Return True if *item_id* already exists in *table_name*."""
+    if table_name == "zillow_properties":
+        return ZillowProperty.select().where(ZillowProperty.property_id == int(item_id)).exists()
     model = get_item_model(table_name)
     return model.select().where(model.item_id == item_id).exists()
 
 
 def upsert_item(table_name: str, item_id: str, url: str, raw_json: dict) -> None:
     """Insert a scraped item into *table_name*; silently skip if it already exists."""
+    if table_name == "zillow_properties":
+        upsert_zillow_property(item_id, url, raw_json)
+        return
     model = get_item_model(table_name)
     (
         model.insert(item_id=item_id, url=url, raw_json=raw_json, scraped_at=datetime.now(timezone.utc))
