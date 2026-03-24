@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 
-from .models import ScrapedPage, ZillowListing, ZillowProperty, db, get_item_model
+from .models import LogMissingField, ScrapedPage, ZillowListing, ZillowProperty, db, get_item_model
 
 # --------------------------------------------------------------------------- #
 #  Connection                                                                  #
@@ -40,7 +40,7 @@ def init_db(postgres_dsn: str) -> None:
         **connect_kwargs,
     )
     db.connect(reuse_if_open=True)
-    db.create_tables([ScrapedPage, ZillowListing, ZillowProperty], safe=True)
+    db.create_tables([ScrapedPage, ZillowListing, ZillowProperty, LogMissingField], safe=True)
 
 
 def init_endpoint_table(table_name: str) -> None:
@@ -143,12 +143,73 @@ def upsert_properties(properties: list[dict], listing_type: str) -> int:
 #  ZillowProperty upsert (zillow_properties table)                            #
 # --------------------------------------------------------------------------- #
 
+# JSON keys that are explicitly mapped to columns in zillow_properties.
+# Anything present in the response but absent from these sets is logged to
+# log_missing_fields for later review.
+_ZP_TOP_LEVEL_MAPPED: set[str] = {
+    "id", "url", "image", "status", "trueStatus", "yearBuilt", "homeType",
+    "beds", "baths", "area", "price", "lastSoldPrice", "currency", "zestimate",
+    "address", "geo", "description", "parcelData", "listingSubTypes",
+    "foreclosureJudicialType", "downPaymentAssistance", "resoData", "agentInfo",
+    "datePosted", "daysOnZillow", "priceHistory", "taxHistory", "photos",
+    "nearby", "schools", "staticMapUrls", "agentEmails",
+}
+
+_ZP_RESO_MAPPED: set[str] = {
+    "attic", "stories", "storiesDecimal", "basement", "basementYN",
+    "bedrooms", "bathrooms", "bathroomsFull", "bathroomsHalf", "bathroomsFloat",
+    "homeType", "roofType", "furnished", "hasGarage", "hasAttachedGarage",
+    "hasOpenParking", "garageParkingCapacity", "parkingCapacity",
+    "coveredParkingCapacity", "ownership", "architecturalStyle",
+    "hasCooling", "hasHeating", "hasSpa", "hasView", "hasFireplace",
+    "fireplaces", "hasLandLease", "hasHomeWarranty", "isNewConstruction",
+    "hasAttachedProperty", "hasAdditionalParcels", "canRaiseHorses",
+    "highSchool", "elementarySchool", "middleOrJuniorSchool",
+    "highSchoolDistrict", "elementarySchoolDistrict", "middleOrJuniorSchoolDistrict",
+    "cityRegion", "taxAnnualAmount", "taxAssessedValue", "livingArea", "lotSize",
+    "buildingArea", "belowGradeFinishedArea", "parcelNumber", "pricePerSquareFoot",
+    "onMarketDate", "listingTerms", "specialListingConditions", "lotSizeDimensions",
+    "subdivisionName", "rooms", "roomTypes", "appliances", "sewer", "cooling",
+    "heating", "flooring", "waterSource", "feesAndDues", "atAGlanceFacts",
+    "parkingFeatures", "laundryFeatures", "exteriorFeatures", "interiorFeatures",
+    "communityFeatures", "fireplaceFeatures", "patioAndPorchFeatures",
+    "propertySubType", "constructionMaterials", "accessibilityFeatures",
+    "foundationDetails", "lotFeatures", "associationFeeIncludes",
+    "securityFeatures", "electric", "associationAmenities",
+}
+
 
 def _ms_to_datetime(ms: int | None) -> datetime | None:
     """Convert a Unix timestamp in milliseconds to a timezone-aware datetime."""
     if ms is None:
         return None
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
+
+
+def _log_missing_fields(table: str, response: dict) -> None:
+    """
+    Compare *response* against the known-mapped key sets for *table* and
+    insert a row in log_missing_fields for every unmapped key found.
+    Duplicate entries are silently ignored (unique constraint on table+column).
+    """
+    if table != "zillow_properties":
+        return  # only implemented for this table for now
+
+    reso = response.get("resoData") or {}
+
+    missing: list[str] = []
+    for key in response:
+        if key not in _ZP_TOP_LEVEL_MAPPED:
+            missing.append(key)
+    for key in reso:
+        if key not in _ZP_RESO_MAPPED:
+            missing.append(f"resoData.{key}")
+
+    if not missing:
+        return
+
+    rows = [{"table_name": table, "missing_column": col} for col in missing]
+    LogMissingField.insert_many(rows).on_conflict_ignore().execute()
 
 
 def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
@@ -158,7 +219,6 @@ def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
     area = p.get("area") or {}
     address = p.get("address") or {}
     agent = p.get("agentInfo") or {}
-    fees = p.get("fees") or {}
     zest = p.get("zestimate") or {}
     parcel = p.get("parcelData") or {}
     reso = p.get("resoData") or {}
@@ -170,7 +230,6 @@ def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
             home_type=p.get("homeType"),
             status=p.get("status"),
             true_status=p.get("trueStatus"),
-            building_id=p.get("buildingId"),
             date_posted=p.get("datePosted"),
             days_on_zillow=p.get("daysOnZillow"),
             price=p.get("price"),
@@ -214,8 +273,6 @@ def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
             buyer_broker_name=agent.get("buyerBrokerName"),
             agent_phone_number=agent.get("agentPhoneNumber"),
             broker_phone_number=agent.get("brokerPhoneNumber"),
-            # Fees
-            fees_monthly_hoa_fee=fees.get("monthlyHoaFee"),
             # Zestimate
             zestimate=zest.get("zestimate"),
             rent_zestimate=zest.get("rentZestimate"),
@@ -235,8 +292,6 @@ def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
             reso_bathrooms=reso.get("bathrooms"),
             reso_bathrooms_full=reso.get("bathroomsFull"),
             reso_bathrooms_half=reso.get("bathroomsHalf"),
-            reso_bathrooms_one_quarter=reso.get("bathroomsOneQuarter"),
-            reso_bathrooms_three_quarter=reso.get("bathroomsThreeQuarter"),
             reso_bathrooms_float=reso.get("bathroomsFloat"),
             reso_home_type=reso.get("homeType"),
             reso_roof_type=reso.get("roofType"),
@@ -255,9 +310,6 @@ def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
             reso_has_view=reso.get("hasView"),
             reso_has_fireplace=reso.get("hasFireplace"),
             reso_fireplaces=reso.get("fireplaces"),
-            reso_has_private_pool=reso.get("hasPrivatePool"),
-            reso_has_carport=reso.get("hasCarport"),
-            reso_has_association=reso.get("hasAssociation"),
             reso_has_land_lease=reso.get("hasLandLease"),
             reso_has_home_warranty=reso.get("hasHomeWarranty"),
             reso_is_new_construction=reso.get("isNewConstruction"),
@@ -276,7 +328,6 @@ def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
             reso_living_area=reso.get("livingArea"),
             reso_lot_size=reso.get("lotSize"),
             reso_building_area=reso.get("buildingArea"),
-            reso_above_grade_finished_area=reso.get("aboveGradeFinishedArea"),
             reso_below_grade_finished_area=reso.get("belowGradeFinishedArea"),
             reso_parcel_number=reso.get("parcelNumber"),
             reso_price_per_square_foot=reso.get("pricePerSquareFoot"),
@@ -285,22 +336,6 @@ def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
             reso_special_listing_conditions=reso.get("specialListingConditions"),
             reso_lot_size_dimensions=reso.get("lotSizeDimensions"),
             reso_subdivision_name=reso.get("subdivisionName"),
-            reso_building_name=reso.get("buildingName"),
-            reso_association_fee=reso.get("associationFee"),
-            reso_hoa_fee=reso.get("hoaFee"),
-            reso_hoa_fee_total=reso.get("hoaFeeTotal"),
-            reso_water_view_yn=reso.get("waterViewYN"),
-            reso_levels=reso.get("levels"),
-            reso_structure_type=reso.get("structureType"),
-            reso_stories_total=reso.get("storiesTotal"),
-            reso_main_level_bathrooms=reso.get("mainLevelBathrooms"),
-            reso_main_level_bedrooms=reso.get("mainLevelBedrooms"),
-            reso_common_walls=reso.get("commonWalls"),
-            reso_fencing=reso.get("fencing"),
-            reso_municipality=reso.get("municipality"),
-            reso_zoning=reso.get("zoning"),
-            reso_list_aor=reso.get("listAOR"),
-            reso_entry_location=reso.get("entryLocation"),
             # Container / list fields
             photos=p.get("photos"),
             nearby=p.get("nearby"),
@@ -334,14 +369,9 @@ def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
             reso_foundation_details=reso.get("foundationDetails"),
             reso_lot_features=reso.get("lotFeatures"),
             reso_association_fee_includes=reso.get("associationFeeIncludes"),
-            reso_associations=reso.get("associations"),
-            reso_association_amenities=reso.get("associationAmenities"),
             reso_security_features=reso.get("securityFeatures"),
             reso_electric=reso.get("electric"),
-            reso_view=reso.get("view"),
-            reso_pool_features=reso.get("poolFeatures"),
-            reso_media=reso.get("media"),
-            reso_other_structures=reso.get("otherStructures"),
+            reso_association_amenities=reso.get("associationAmenities"),
             # Full raw payload
             raw_json=p,
             scraped_at=datetime.now(timezone.utc),
@@ -349,6 +379,8 @@ def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
         .on_conflict_ignore()
         .execute()
     )
+
+    _log_missing_fields("zillow_properties", p)
 
 
 # --------------------------------------------------------------------------- #
