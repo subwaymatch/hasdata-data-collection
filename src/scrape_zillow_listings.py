@@ -26,8 +26,8 @@ from scraper.db import close_db, init_db
 from scraper.endpoints import ENDPOINTS
 from scraper.generic_scraper import scrape_paginated
 
-LOCATION = settings.default_location
-LISTING_TYPE = settings.default_listing_type
+LOCATION = "Savoy, IL"
+LISTING_TYPE = "sold"
 
 # Year-built loop: one year at a time
 YEAR_MIN = 1900
@@ -46,11 +46,11 @@ try:
     for year in range(YEAR_MIN, YEAR_MAX + 1):
         for beds_min, beds_max in BED_RANGES:
             beds_label = (
-                f"beds-{beds_min}-{beds_max}" if beds_max is not None else f"beds-{beds_min}plus"
+                f"beds-{beds_min}-{beds_max}"
+                if beds_max is not None
+                else f"beds-{beds_min}plus"
             )
-            location_label = (
-                LOCATION.lower().replace(",", "").replace(" ", "-")
-            )
+            location_label = LOCATION.lower().replace(",", "").replace(" ", "-")
             page_label = f"{location_label}-{LISTING_TYPE}-year-{year}-{beds_label}"
 
             base_params: dict = {
@@ -69,7 +69,6 @@ try:
                 config=config,
                 base_params=base_params,
                 skip_done=True,
-                delay=1.0,
                 page_label=page_label,
             )
 finally:

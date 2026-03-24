@@ -150,7 +150,9 @@ def scrape_paginated(
             # ---------------------------------------------------------------- #
             # 2. Fetch from HasData                                             #
             # ---------------------------------------------------------------- #
-            console.print(f"  [cyan]FETCH[/cyan]  [{label}] page {page} → {request_url}")
+            console.print(
+                f"  [cyan]FETCH[/cyan]  [{label}] page {page} → {request_url}"
+            )
             request_url, data = client.fetch(config.api_path, params)
 
             with open(backup_path, "w") as f:
@@ -187,7 +189,11 @@ def scrape_paginated(
             console.print(
                 f"  [green]OK[/green]     [{label}] page {page}"
                 f" — {len(items)} items upserted"
-                + (f" (total results: {total_results})" if total_results is not None else "")
+                + (
+                    f" (total results: {total_results})"
+                    if total_results is not None
+                    else ""
+                )
             )
 
             # ---------------------------------------------------------------- #
@@ -223,7 +229,7 @@ def scrape_paginated(
 def scrape_per_item(
     config: EndpointConfig,
     skip_done: bool = True,
-    delay: float = 1.0,
+    delay: float = 0.1,
 ) -> None:
     """
     Fetch detail pages for every URL found in config.source_table.
@@ -264,8 +270,10 @@ def scrape_per_item(
                     prospective_id = config.id_extractor({"url": source_url})
                 except (KeyError, TypeError):
                     prospective_id = None
-                if prospective_id and prospective_id != "None" and is_item_scraped(
-                    config.table_name, prospective_id
+                if (
+                    prospective_id
+                    and prospective_id != "None"
+                    and is_item_scraped(config.table_name, prospective_id)
                 ):
                     console.print(f"  [dim]SKIP[/dim]   (DB) {prospective_id}")
                     continue
@@ -282,7 +290,9 @@ def scrape_per_item(
 
             items = _extract_items(config, data)
             if not items:
-                console.print(f"  [yellow]EMPTY[/yellow] {source_url} — no data in response")
+                console.print(
+                    f"  [yellow]EMPTY[/yellow] {source_url} — no data in response"
+                )
                 continue
 
             item = items[0]

@@ -18,11 +18,11 @@ class Settings:
 
     # Local backup
     # Base directory under which each endpoint creates its own subdirectory
-    scraped_json_base_dir: Path = Path(os.getenv("SCRAPED_JSON_BASE_DIR", "scraped_json"))
+    scraped_json_base_dir: Path = Path(
+        os.getenv("SCRAPED_JSON_BASE_DIR", "scraped_json")
+    )
 
     # Scraper behaviour
-    default_listing_type: str = os.getenv("DEFAULT_LISTING_TYPE", "sold")
-    default_location: str = os.getenv("DEFAULT_LOCATION", "Champaign, IL")
     max_retries: int = int(os.getenv("MAX_RETRIES", "5"))
     backoff_factor: int = int(os.getenv("BACKOFF_FACTOR", "2"))
     request_timeout: int = int(os.getenv("REQUEST_TIMEOUT", "30"))
