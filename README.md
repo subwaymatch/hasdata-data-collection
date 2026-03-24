@@ -21,8 +21,7 @@ hasdata-data-collection/
         ├── endpoints.py        # EndpointConfig registry — add new APIs here
         ├── generic_scraper.py  # scrape_paginated / scrape_per_item
         ├── hasdata.py          # HasData API client with retry/backoff
-        ├── models.py           # Peewee ORM models
-        └── scraper.py          # Zillow listing pagination loop (legacy)
+        └── models.py           # Peewee ORM models
 ```
 
 ## Setup
@@ -46,16 +45,24 @@ Local backups written to `scraped_json/zillow_listings/`.
 ```python
 from scraper.config import settings
 from scraper.db import close_db, init_db
-from scraper.scraper import scrape
+from scraper.endpoints import ENDPOINTS
+from scraper.generic_scraper import scrape_paginated
+
+base_params = {
+    "keyword": "Champaign, IL",
+    "type": "sold",   # "sold" | "forSale" | "forRent"
+    "hide55plusCommunities": "true",
+    "homeTypes[]": "house",
+}
 
 init_db(settings.postgres_dsn)
 try:
-    scrape(
-        location="Champaign, IL",
-        listing_type="sold",   # "sold" | "forSale" | "forRent"
+    scrape_paginated(
+        config=ENDPOINTS["zillow_listing"],
+        base_params=base_params,
         skip_done=True,
-        hide_55_plus=True,
         delay=1.0,
+        page_label="champaign-il-sold",
     )
 finally:
     close_db()
