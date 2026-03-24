@@ -24,6 +24,7 @@ from rich.console import Console
 
 from .config import settings
 from .db import (
+    get_page_has_next,
     get_source_urls,
     init_endpoint_table,
     is_item_scraped,
@@ -136,6 +137,13 @@ def scrape_paginated(
                 console.print(
                     f"  [dim]SKIP[/dim]   [{label}] page {page} (already in DB)"
                 )
+                # has_next_page=None means a legacy row recorded before this
+                # column existed — fall through and keep paginating to be safe.
+                if get_page_has_next(request_url) is False:
+                    console.print(
+                        f"  [bold green]Finished pagination for [{label}].[/bold green]"
+                    )
+                    break
                 page += 1
                 continue
 
@@ -170,19 +178,22 @@ def scrape_paginated(
                 f" — {len(items)} items upserted"
             )
 
+            # ---------------------------------------------------------------- #
+            # 4. Advance pagination                                             #
+            # ---------------------------------------------------------------- #
+            pagination = data.get("pagination", {})
+            next_page_exists = _has_next_page(pagination, page)
+
             mark_page_done(
                 url=request_url,
                 location=page_label,
                 listing_type=config.name,
                 page_number=page,
                 property_count=len(items),
+                has_next_page=next_page_exists,
             )
 
-            # ---------------------------------------------------------------- #
-            # 4. Advance pagination                                             #
-            # ---------------------------------------------------------------- #
-            pagination = data.get("pagination", {})
-            if not _has_next_page(pagination, page):
+            if not next_page_exists:
                 console.print(
                     f"  [bold green]Finished pagination for [{label}].[/bold green]"
                 )

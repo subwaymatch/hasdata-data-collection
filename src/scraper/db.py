@@ -76,6 +76,7 @@ def mark_page_done(
     listing_type: str,
     page_number: int,
     property_count: int,
+    has_next_page: bool = False,
 ) -> None:
     ScrapedPage.insert(
         url=url,
@@ -83,8 +84,20 @@ def mark_page_done(
         listing_type=listing_type,
         page_number=page_number,
         property_count=property_count,
+        has_next_page=has_next_page,
         scraped_at=datetime.now(timezone.utc),
     ).on_conflict_ignore().execute()
+
+
+def get_page_has_next(url: str) -> bool | None:
+    """
+    Return the stored has_next_page value for a previously scraped URL.
+    Returns None if the row doesn't exist or the column is NULL (legacy row).
+    """
+    row = ScrapedPage.get_or_none(ScrapedPage.url == url)
+    if row is None:
+        return None
+    return row.has_next_page
 
 
 # --------------------------------------------------------------------------- #
