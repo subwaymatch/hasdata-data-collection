@@ -163,6 +163,8 @@ def scrape_paginated(
             # 3. Upsert items                                                   #
             # ---------------------------------------------------------------- #
             items = _extract_items(config, data)
+            total_results = (data.get("searchInformation") or {}).get("totalResults")
+
             if not items:
                 console.print(
                     f"  [yellow]EMPTY[/yellow]  [{label}] page {page} — stopping."
@@ -174,6 +176,7 @@ def scrape_paginated(
                     page_number=page,
                     property_count=0,
                     has_next_page=False,
+                    total_results=total_results,
                 )
                 break
 
@@ -184,6 +187,7 @@ def scrape_paginated(
             console.print(
                 f"  [green]OK[/green]     [{label}] page {page}"
                 f" — {len(items)} items upserted"
+                + (f" (total results: {total_results})" if total_results is not None else "")
             )
 
             # ---------------------------------------------------------------- #
@@ -199,6 +203,7 @@ def scrape_paginated(
                 page_number=page,
                 property_count=len(items),
                 has_next_page=next_page_exists,
+                total_results=total_results,
             )
 
             if not next_page_exists:

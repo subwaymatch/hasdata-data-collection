@@ -78,6 +78,7 @@ def mark_page_done(
     page_number: int,
     property_count: int,
     has_next_page: bool = False,
+    total_results: int | None = None,
 ) -> None:
     ScrapedPage.insert(
         url=url,
@@ -85,6 +86,7 @@ def mark_page_done(
         listing_type=listing_type,
         page_number=page_number,
         property_count=property_count,
+        total_results=total_results,
         has_next_page=has_next_page,
         scraped_at=datetime.now(timezone.utc),
     ).on_conflict_ignore().execute()
