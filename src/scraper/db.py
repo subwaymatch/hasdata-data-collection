@@ -45,6 +45,9 @@ def init_db(postgres_dsn: str) -> None:
 
 def init_endpoint_table(table_name: str) -> None:
     """Create the table for *table_name* if it doesn't exist."""
+    if table_name == "zillow_listings":
+        db.create_tables([ZillowListing], safe=True)
+        return
     if table_name == "zillow_properties":
         db.create_tables([ZillowProperty], safe=True)
         return
@@ -322,6 +325,39 @@ def is_item_scraped(table_name: str, item_id: str) -> bool:
 
 def upsert_item(table_name: str, item_id: str, url: str, raw_json: dict) -> None:
     """Insert a scraped item into *table_name*; silently skip if it already exists."""
+    if table_name == "zillow_listings":
+        address = raw_json.get("address") or {}
+        now = datetime.now(timezone.utc)
+        (
+            ZillowListing.insert(
+                property_id=int(item_id),
+                url=url or raw_json.get("url"),
+                home_type=raw_json.get("homeType"),
+                status=raw_json.get("status"),
+                listing_type=raw_json.get("listingType"),
+                price=raw_json.get("price"),
+                zestimate=raw_json.get("zestimate"),
+                rent_zestimate=raw_json.get("rentZestimate"),
+                beds=raw_json.get("beds"),
+                baths=raw_json.get("baths"),
+                area=raw_json.get("area"),
+                days_on_zillow=raw_json.get("daysOnZillow"),
+                address_raw=raw_json.get("addressRaw"),
+                street=address.get("street"),
+                city=address.get("city"),
+                state=address.get("state"),
+                zipcode=address.get("zipcode"),
+                latitude=raw_json.get("latitude"),
+                longitude=raw_json.get("longitude"),
+                broker_name=raw_json.get("brokerName"),
+                raw_json=raw_json,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_ignore()
+            .execute()
+        )
+        return
     if table_name == "zillow_properties":
         upsert_zillow_property(item_id, url, raw_json)
         return
