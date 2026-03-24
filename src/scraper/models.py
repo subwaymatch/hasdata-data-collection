@@ -285,11 +285,12 @@ class LogMissingField(BaseModel):
 
     table_name = TextField()     # e.g. "zillow_properties"
     missing_column = TextField() # e.g. "resoData.zoning"
+    value = TextField(null=True) # serialized value of the missing field
 
     class Meta:
         table_name = "log_missing_fields"
         indexes = (
-            (("table_name", "missing_column"), True),  # unique together
+            (("table_name", "missing_column", "value"), True),  # unique together
         )
 
 
