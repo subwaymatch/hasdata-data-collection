@@ -3,6 +3,7 @@ Database helpers: connect, create tables, and upsert data.
 All SQL-level work lives here so models.py stays clean.
 """
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -199,29 +200,41 @@ def _ms_to_datetime(ms: int | None) -> datetime | None:
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
 
 
+def _serialize_value(v: object) -> str | None:
+    """Serialize a field value to a string for storage in log_missing_fields."""
+    if v is None:
+        return None
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, ensure_ascii=False)
+    return str(v)
+
+
 def _log_missing_fields(table: str, response: dict) -> None:
     """
     Compare *response* against the known-mapped key sets for *table* and
     insert a row in log_missing_fields for every unmapped key found.
-    Duplicate entries are silently ignored (unique constraint on table+column).
+    Duplicate entries are silently ignored (unique constraint on table+column+value).
     """
     if table != "zillow_properties":
         return  # only implemented for this table for now
 
     reso = response.get("resoData") or {}
 
-    missing: list[str] = []
+    missing: list[tuple[str, object]] = []
     for key in response:
         if key not in _ZP_TOP_LEVEL_MAPPED:
-            missing.append(key)
+            missing.append((key, response[key]))
     for key in reso:
         if key not in _ZP_RESO_MAPPED:
-            missing.append(f"resoData.{key}")
+            missing.append((f"resoData.{key}", reso[key]))
 
     if not missing:
         return
 
-    rows = [{"table_name": table, "missing_column": col} for col in missing]
+    rows = [
+        {"table_name": table, "missing_column": col, "value": _serialize_value(val)}
+        for col, val in missing
+    ]
     LogMissingField.insert_many(rows).on_conflict_ignore().execute()
 
 
