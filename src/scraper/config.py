@@ -17,8 +17,6 @@ class Settings:
     postgres_dsn: str = os.environ["POSTGRES_DSN"]
 
     # Local backup
-    # backup_dir: per-endpoint subdirectory (kept for backward compat with scraper.py)
-    backup_dir: Path = Path(os.getenv("BACKUP_DIR", "scraped_json/zillow_listings"))
     # Base directory under which each endpoint creates its own subdirectory
     scraped_json_base_dir: Path = Path(os.getenv("SCRAPED_JSON_BASE_DIR", "scraped_json"))
 
@@ -30,7 +28,6 @@ class Settings:
     request_timeout: int = int(os.getenv("REQUEST_TIMEOUT", "30"))
 
     def __init__(self):
-        self.backup_dir.mkdir(parents=True, exist_ok=True)
         self.scraped_json_base_dir.mkdir(parents=True, exist_ok=True)
 
 

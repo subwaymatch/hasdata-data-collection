@@ -1,52 +1,55 @@
+import importlib
+import json
+import os
 import shutil
 import tempfile
-import os
-import sys
-import types
-import importlib
 from pathlib import Path
 
 os.environ.setdefault("HASDATA_API_KEY", "test-key")
 os.environ.setdefault("POSTGRES_DSN", "postgresql://user:pass@localhost:5432/testdb")
 
-
-def _import_scraper_module():
-    fake_models = types.ModuleType("scraper.models")
-    fake_models.ScrapedPage = object
-    fake_models.ZillowListing = object
-    fake_models.db = object()
-    fake_models.get_item_model = lambda table_name: object
-    sys.modules.setdefault("scraper.models", fake_models)
-    return importlib.import_module("scraper.scraper")
+from scraper.endpoints import ENDPOINTS
 
 
-def test_get_backup_path_creates_backup_directory(monkeypatch):
-    scraper = _import_scraper_module()
+def _import_generic_scraper():
+    return importlib.import_module("scraper.generic_scraper")
+
+
+def test_backup_dir_creates_missing_directory(monkeypatch):
+    scraper = _import_generic_scraper()
     root = Path(tempfile.mkdtemp())
-    backup_dir = root / "missing" / "json_backups"
+    backup_base = root / "missing" / "scraped_json"
+    config = ENDPOINTS["zillow_listing"]
 
-    monkeypatch.setattr(scraper.settings, "backup_dir", backup_dir)
-    assert not backup_dir.exists()
+    monkeypatch.setattr(scraper.settings, "scraped_json_base_dir", backup_base)
+    assert not backup_base.exists()
 
-    backup_path = scraper._get_backup_path("Urbana, IL", "forSale", 1)
+    result = scraper._backup_dir(config)
 
-    assert backup_dir.exists()
-    assert backup_dir.is_dir()
-    assert str(backup_path).endswith(".json")
+    expected = backup_base / config.backup_subdir
+    assert result == expected
+    assert result.exists()
+    assert result.is_dir()
 
     shutil.rmtree(root, ignore_errors=True)
 
 
-def test_scrape_ignores_existing_local_cache(monkeypatch):
-    scraper = _import_scraper_module()
-    root = Path(tempfile.mkdtemp())
-    backup_file = root / "existing.json"
-    backup_file.write_text("{ not valid json")
+def test_scrape_paginated_ignores_existing_local_cache(monkeypatch, tmp_path: Path):
+    scraper = _import_generic_scraper()
+    config = ENDPOINTS["zillow_listing"]
+    backup_base = tmp_path / "scraped_json"
+    backup_dir = backup_base / config.backup_subdir
+    backup_dir.mkdir(parents=True)
 
-    monkeypatch.setattr(scraper, "_get_backup_path", lambda *_: str(backup_file))
+    # Pre-create a corrupt/stale backup file
+    existing_file = backup_dir / "zillow_listing-page-001.json"
+    existing_file.write_text("{ not valid json")
+
+    monkeypatch.setattr(scraper.settings, "scraped_json_base_dir", backup_base)
+    monkeypatch.setattr(scraper, "init_endpoint_table", lambda *_: None)
     monkeypatch.setattr(scraper, "is_page_done", lambda *_: False)
-    monkeypatch.setattr(scraper, "upsert_properties", lambda properties, _: len(properties))
     monkeypatch.setattr(scraper, "mark_page_done", lambda **_: None)
+    monkeypatch.setattr(scraper, "upsert_item", lambda *_: None)
     monkeypatch.setattr(scraper.time, "sleep", lambda *_: None)
 
     class FakeClient:
@@ -56,7 +59,7 @@ def test_scrape_ignores_existing_local_cache(monkeypatch):
         def __exit__(self, *_):
             return None
 
-        def fetch_listings_page(self, *_):
+        def fetch(self, *_):
             return (
                 "https://api.hasdata.com/scrape/zillow/listing?page=1",
                 {"properties": [{"id": 1, "url": "https://x/1"}], "pagination": {}},
@@ -64,7 +67,16 @@ def test_scrape_ignores_existing_local_cache(monkeypatch):
 
     monkeypatch.setattr(scraper, "HasDataClient", FakeClient)
 
-    scraper.scrape(location="Urbana, IL", listing_type="forSale", skip_done=True, delay=0.0)
-    assert backup_file.read_text()
+    scraper.scrape_paginated(
+        config=config,
+        base_params={"keyword": "Urbana, IL", "type": "forSale"},
+        skip_done=False,
+        delay=0.0,
+    )
 
-    shutil.rmtree(root, ignore_errors=True)
+    # Backup file should now contain valid JSON
+    backup_files = list(backup_dir.glob("*.json"))
+    assert backup_files
+    data = json.loads(backup_files[0].read_text())
+    assert "properties" in data
+

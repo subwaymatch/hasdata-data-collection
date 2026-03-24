@@ -60,8 +60,7 @@ class EndpointConfig:
 
 ENDPOINTS: dict[str, EndpointConfig] = {
     # ------------------------------------------------------------------
-    # Zillow: listing search  (already implemented in scraper.py; included
-    # here so it can also be driven through the generic pipeline)
+    # Zillow: listing search
     # ------------------------------------------------------------------
     "zillow_listing": EndpointConfig(
         name="zillow_listing",
