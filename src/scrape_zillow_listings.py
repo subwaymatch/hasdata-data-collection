@@ -1,15 +1,73 @@
+"""
+Scrape Zillow sold house listings for Champaign, IL.
+
+Strategy
+--------
+Zillow caps total paginated results per search query, so we break the search
+into granular sub-queries along two dimensions:
+
+  1. yearBuilt — one query per year from 1900 to 2026 (inclusive)
+  2. beds      — two ranges per year:
+                   • 1–3 bedrooms
+                   • 4+ bedrooms (no upper bound)
+
+Only `homeTypes[]=house` is queried.
+
+For each combination, all available pages are paginated through and results
+are upserted into zillow_listings.  JSON responses are backed up under
+scraped_json/zillow_listings/ with filenames that embed the year and bed range.
+
+Resume support: any page whose URL is already recorded in scraped_pages is
+skipped automatically (pass skip_done=False to force a full re-fetch).
+"""
+
 from scraper.config import settings
 from scraper.db import close_db, init_db
-from scraper.scraper import scrape
+from scraper.endpoints import ENDPOINTS
+from scraper.generic_scraper import scrape_paginated
+
+LOCATION = settings.default_location
+LISTING_TYPE = settings.default_listing_type
+
+# Year-built loop: one year at a time
+YEAR_MIN = 1900
+YEAR_MAX = 2026
+
+# Bedroom ranges: (beds_min, beds_max) — beds_max=None means no upper bound (4+)
+BED_RANGES = [
+    (1, 3),
+    (4, None),
+]
+
+config = ENDPOINTS["zillow_listing"]
 
 init_db(settings.postgres_dsn)
 try:
-    scrape(
-        location=settings.default_location,
-        listing_type=settings.default_listing_type,
-        skip_done=True,  # set False to force re-fetch
-        hide_55_plus=True,  # set False to include 55+ communities
-        delay=1.0,
-    )
+    for year in range(YEAR_MIN, YEAR_MAX + 1):
+        for beds_min, beds_max in BED_RANGES:
+            beds_label = (
+                f"beds-{beds_min}-{beds_max}" if beds_max is not None else f"beds-{beds_min}plus"
+            )
+            page_label = f"year-{year}-{beds_label}"
+
+            base_params: dict = {
+                "keyword": LOCATION,
+                "type": LISTING_TYPE,
+                "hide55plusCommunities": "true",
+                "homeTypes[]": "house",
+                "yearBuilt[min]": year,
+                "yearBuilt[max]": year,
+                "beds[min]": beds_min,
+            }
+            if beds_max is not None:
+                base_params["beds[max]"] = beds_max
+
+            scrape_paginated(
+                config=config,
+                base_params=base_params,
+                skip_done=True,
+                delay=1.0,
+                page_label=page_label,
+            )
 finally:
     close_db()
