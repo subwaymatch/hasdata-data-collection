@@ -136,6 +136,16 @@ def scrape_paginated(
                 console.print(
                     f"  [dim]SKIP[/dim]   [{label}] page {page} (already in DB)"
                 )
+                # Check cached response to see if pagination ends here
+                if backup_path.exists():
+                    with open(backup_path) as f:
+                        cached_data = json.load(f)
+                    cached_pagination = cached_data.get("pagination", {})
+                    if not _has_next_page(cached_pagination, page):
+                        console.print(
+                            f"  [bold green]Finished pagination for [{label}].[/bold green]"
+                        )
+                        break
                 page += 1
                 continue
 
