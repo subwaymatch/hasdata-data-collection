@@ -41,10 +41,6 @@ def init_db(postgres_dsn: str) -> None:
     )
     db.connect(reuse_if_open=True)
     db.create_tables([ScrapedPage, ZillowListing, ZillowProperty, LogMissingField], safe=True)
-    # Add has_next_page column to existing scraped_pages tables that predate it
-    db.execute_sql(
-        "ALTER TABLE scraped_pages ADD COLUMN IF NOT EXISTS has_next_page BOOLEAN"
-    )
 
 
 def init_endpoint_table(table_name: str) -> None:
