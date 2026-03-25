@@ -17,6 +17,7 @@ Two modes:
 import hashlib
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -226,19 +227,78 @@ def scrape_paginated(
 # --------------------------------------------------------------------------- #
 
 
+def _fetch_one_item(
+    config: EndpointConfig,
+    source_url: str,
+    skip_done: bool,
+) -> None:
+    """
+    Fetch and persist a single item.  Creates its own HasDataClient so it is
+    safe to call from multiple threads simultaneously.
+    """
+    params = {config.source_url_param: source_url}
+
+    # ---------------------------------------------------------------- #
+    # 1. Skip if already in target table (URL-keyed endpoints only)   #
+    # ---------------------------------------------------------------- #
+    if skip_done:
+        try:
+            prospective_id = config.id_extractor({"url": source_url})
+        except (KeyError, TypeError):
+            prospective_id = None
+        if (
+            prospective_id
+            and prospective_id != "None"
+            and is_item_scraped(config.table_name, prospective_id)
+        ):
+            console.print(f"  [dim]SKIP[/dim]   (DB) {prospective_id}")
+            return
+
+    # ---------------------------------------------------------------- #
+    # 2. Fetch from HasData                                             #
+    # ---------------------------------------------------------------- #
+    console.print(f"  [cyan]FETCH[/cyan]  {source_url}")
+    with HasDataClient() as client:
+        try:
+            _request_url, data = client.fetch(config.api_path, params)
+        except Exception as exc:
+            console.print(f"  [red]ERROR[/red]  {source_url} — {exc}")
+            return
+
+    items = _extract_items(config, data)
+    if not items:
+        console.print(
+            f"  [yellow]EMPTY[/yellow] {source_url} — no data in response"
+        )
+        return
+
+    item = items[0]
+    item_id = config.id_extractor(item)
+    backup_path = _item_backup_path(config, item_id)
+
+    with open(backup_path, "w") as f:
+        json.dump(data, f, indent=2)
+
+    upsert_item(config.table_name, item_id, source_url, item)
+    console.print(f"  [green]OK[/green]     {item_id}")
+
+
 def scrape_per_item(
     config: EndpointConfig,
     skip_done: bool = True,
     delay: float = 0.1,
+    max_workers: int = 1,
 ) -> None:
     """
     Fetch detail pages for every URL found in config.source_table.
 
     Parameters
     ----------
-    config    : registered EndpointConfig with paginated=False
-    skip_done : skip items whose item_id is already in the target table
-    delay     : polite sleep between live API calls (seconds)
+    config      : registered EndpointConfig with paginated=False
+    skip_done   : skip items whose item_id is already in the target table
+    delay       : polite sleep between requests in sequential mode (ignored
+                  when max_workers > 1 — pool size controls concurrency)
+    max_workers : number of parallel worker threads (1 = sequential)
     """
     if config.paginated:
         raise ValueError(
@@ -252,8 +312,20 @@ def scrape_per_item(
     console.print(
         f"[bold]scrape_per_item[/bold] [{config.name}]"
         f" — {len(source_urls)} source URL(s) from '{config.source_table}'"
+        + (f" (workers={max_workers})" if max_workers > 1 else "")
     )
 
+    if max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(_fetch_one_item, config, url, skip_done): url
+                for url in source_urls
+            }
+            for future in as_completed(futures):
+                future.result()  # re-raise any unhandled exceptions
+        return
+
+    # Sequential path (original behaviour, preserves delay)
     with HasDataClient() as client:
         for source_url in source_urls:
             params = {config.source_url_param: source_url}
