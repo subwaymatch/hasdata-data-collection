@@ -27,6 +27,7 @@ from .config import settings
 from .db import (
     get_page_has_next,
     get_source_urls,
+    get_unscraped_source_urls,
     init_endpoint_table,
     is_item_scraped,
     is_page_done,
@@ -308,7 +309,15 @@ def scrape_per_item(
 
     init_endpoint_table(config.table_name)
 
-    source_urls = get_source_urls(config.source_table, config.source_url_column)
+    if skip_done and config.source_id_column:
+        source_urls = get_unscraped_source_urls(
+            config.source_table,
+            config.source_url_column,
+            config.source_id_column,
+            config.table_name,
+        )
+    else:
+        source_urls = get_source_urls(config.source_table, config.source_url_column)
     console.print(
         f"[bold]scrape_per_item[/bold] [{config.name}]"
         f" — {len(source_urls)} source URL(s) from '{config.source_table}'"

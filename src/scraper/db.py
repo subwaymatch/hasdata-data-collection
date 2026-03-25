@@ -563,3 +563,29 @@ def get_source_urls(source_table: str, url_column: str) -> list[str]:
         f'SELECT "{url_column}" FROM "{source_table}" WHERE "{url_column}" IS NOT NULL'
     )
     return [row[0] for row in cursor.fetchall()]
+
+
+def get_unscraped_source_urls(
+    source_table: str,
+    url_column: str,
+    source_id_column: str,
+    target_table: str,
+) -> list[str]:
+    """
+    Return URLs from *source_table* whose IDs are not yet present in *target_table*.
+
+    Uses a single NOT IN subquery to bulk-filter already-scraped rows, avoiding
+    the N individual existence checks that row-by-row deduplication would require.
+    The target ID column is ``property_id`` for ``zillow_properties`` and
+    ``item_id`` for all other tables.
+    """
+    target_id_column = (
+        "property_id" if target_table == "zillow_properties" else "item_id"
+    )
+    cursor = db.execute_sql(
+        f'SELECT "{url_column}" FROM "{source_table}" '
+        f'WHERE "{url_column}" IS NOT NULL '
+        f'AND "{source_id_column}" NOT IN '
+        f'(SELECT "{target_id_column}" FROM "{target_table}")'
+    )
+    return [row[0] for row in cursor.fetchall()]

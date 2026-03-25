@@ -53,6 +53,11 @@ class EndpointConfig:
     # Query-parameter name to use when passing the URL to HasData
     source_url_param: str = "url"
 
+    # Column in source_table that holds the item's unique ID (e.g. "property_id").
+    # When set, scrape_per_item will use a single bulk NOT-IN query to skip
+    # already-scraped items instead of checking row-by-row.
+    source_id_column: Optional[str] = None
+
 
 # ---------------------------------------------------------------------------
 # Registered endpoints
@@ -86,6 +91,7 @@ ENDPOINTS: dict[str, EndpointConfig] = {
         source_table="zillow_listings",
         source_url_column="url",
         source_url_param="url",
+        source_id_column="property_id",
     ),
 
     # ------------------------------------------------------------------
