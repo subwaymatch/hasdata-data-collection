@@ -19,13 +19,15 @@ from peewee import (
     FloatField,
     IntegerField,
     Model,
-    PostgresqlDatabase,
     TextField,
 )
+from playhouse.pool import PooledPostgresqlDatabase
 from playhouse.postgres_ext import BinaryJSONField
 
 # Lazy database — configured in db.init_db()
-db = PostgresqlDatabase(None)
+# PooledPostgresqlDatabase assigns one connection per thread, enabling thread-safe
+# concurrent access without any changes to the rest of the codebase.
+db = PooledPostgresqlDatabase(None, max_connections=20, stale_timeout=300)
 
 # Cache so we don't recreate the same model class twice
 _item_model_cache: dict[str, type] = {}

@@ -16,12 +16,17 @@ from scraper.db import close_db, init_db
 from scraper.endpoints import ENDPOINTS
 from scraper.generic_scraper import scrape_per_item
 
+# Number of property detail pages to fetch in parallel.
+# Each worker creates its own HTTP session and DB connection from the pool.
+MAX_WORKERS = 4
+
 init_db(settings.postgres_dsn)
 try:
     scrape_per_item(
         config=ENDPOINTS["zillow_property"],
         skip_done=True,
         delay=1.0,
+        max_workers=MAX_WORKERS,
     )
 finally:
     close_db()
