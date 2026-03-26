@@ -335,6 +335,7 @@ class ZillowProperty(BaseModel):
     reso_view = BinaryJSONField(null=True)
     reso_waterfront_features = BinaryJSONField(null=True)
     reso_window_features = BinaryJSONField(null=True)
+    reso_inclusions = BinaryJSONField(null=True)
 
     # Full raw response payload
     raw_json = BinaryJSONField(null=True)

@@ -212,6 +212,7 @@ _ZP_RESO_MAPPED: set[str] = {
     "horseAmenities", "media", "otherEquipment", "otherFacts", "otherParking",
     "otherStructures", "poolFeatures", "roadSurfaceType", "spaFeatures",
     "utilities", "view", "waterfrontFeatures", "windowFeatures",
+    "inclusions",
 }
 
 
@@ -483,6 +484,7 @@ def upsert_zillow_property(item_id: str, url: str, raw_json: dict) -> None:
             reso_view=reso.get("view"),
             reso_waterfront_features=reso.get("waterfrontFeatures"),
             reso_window_features=reso.get("windowFeatures"),
+            reso_inclusions=reso.get("inclusions"),
             # Full raw payload
             raw_json=p,
             scraped_at=datetime.now(timezone.utc),
