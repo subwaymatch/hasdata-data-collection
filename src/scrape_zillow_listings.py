@@ -28,7 +28,7 @@ from scraper.db import close_db, init_db
 from scraper.endpoints import ENDPOINTS
 from scraper.generic_scraper import scrape_paginated
 
-LOCATION = "Savoy, IL"
+LOCATION = "Ann Arbor, MI"
 LISTING_TYPE = "sold"
 
 # Year-built loop: one year at a time
@@ -44,7 +44,7 @@ BED_RANGES = [
 # Number of (year, beds) combinations to scrape in parallel.
 # Each worker makes its own independent sequence of paginated requests.
 # Raise to increase throughput; lower if you hit API rate limits.
-MAX_WORKERS = 4
+MAX_WORKERS = 15
 
 config = ENDPOINTS["zillow_listing"]
 

@@ -268,9 +268,7 @@ def _fetch_one_item(
 
     items = _extract_items(config, data)
     if not items:
-        console.print(
-            f"  [yellow]EMPTY[/yellow] {source_url} — no data in response"
-        )
+        console.print(f"  [yellow]EMPTY[/yellow] {source_url} — no data in response")
         return
 
     item = items[0]
@@ -318,6 +316,7 @@ def scrape_per_item(
         )
     else:
         source_urls = get_source_urls(config.source_table, config.source_url_column)
+
     console.print(
         f"[bold]scrape_per_item[/bold] [{config.name}]"
         f" — {len(source_urls)} source URL(s) from '{config.source_table}'"

@@ -18,7 +18,7 @@ from scraper.generic_scraper import scrape_per_item
 
 # Number of property detail pages to fetch in parallel.
 # Each worker creates its own HTTP session and DB connection from the pool.
-MAX_WORKERS = 4
+MAX_WORKERS = 15
 
 init_db(settings.postgres_dsn)
 try:
